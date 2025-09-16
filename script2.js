@@ -1,0 +1,564 @@
+
+const numQubitsInput = document.getElementById('numQubits');
+const basisSelector = document.getElementById('basisSelector');
+const amplitudeInput = document.getElementById('amplitudeInput');
+const addTermBtn = document.getElementById('addTermBtn');
+const waveInput = document.getElementById('waveInput');
+let histogramChart = null;
+// Populate basis state dropdown dynamically
+numQubitsInput.addEventListener('input', () => {
+  const n = parseInt(numQubitsInput.value);
+  basisSelector.innerHTML = '<option value="">-- Select basis state --</option>';
+  if (Number.isInteger(n) && n >= 1 && n <= 5) {
+    const totalCombinations = 1 << n;
+    for (let i = 0; i < totalCombinations; i++) {
+      const binStr = i.toString(2).padStart(n, '0');
+      const option = document.createElement('option');
+      option.value = binStr;
+      option.textContent = '|' + binStr + '>';
+      basisSelector.appendChild(option);
+    }
+  }
+  waveInput.value = '';
+  document.getElementById('colVector').textContent = '';
+  document.getElementById('errorMsg').textContent = '';
+});
+function drawHistogram(counts) {
+    const labels = Object.keys(counts);
+    const values = Object.values(counts);
+
+    const ctx = document.getElementById('histogram').getContext('2d');
+     if (histogramChart) {
+        histogramChart.destroy();
+    }
+    histogramChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Measurement Counts',
+                data: values,
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: { display: true, text: 'Bitstring Outcome' }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Counts' }
+                }
+            }
+        }
+    });
+}
+
+//circuit printing
+function renderCircuit(numQubits, gates) {
+  const container = document.getElementById("circuitContainer");
+  const numClassical = numQubits;
+  container.innerHTML = "";
+  container.innerHTML += "<h2>circuit Diagram </h2>";
+
+  const width = 120 * (gates.length + 1);
+  const qheight = 60 ;
+  const cHeight = 40;
+  const height = numQubits * qheight + numClassical * cHeight + 60;
+
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+
+  // --- Draw wires ---
+  for (let q = 0; q < numQubits; q++) {
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("x1", 20);
+    line.setAttribute("y1", 30 + q * qheight);
+    line.setAttribute("x2", width - 20);
+    line.setAttribute("y2", 30 + q * qheight);
+    line.setAttribute("stroke", "black");
+    line.setAttribute("stroke-width", "2");
+    svg.appendChild(line);
+
+    // Label
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", 0);
+    text.setAttribute("y", 35 + q * qheight);
+    text.textContent = `q${q}`;
+    svg.appendChild(text);
+  }
+  for (let q = 0; q < numQubits; q++) {
+    const y = 30 + q * qheight;
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("x1", 20);
+    line.setAttribute("y1", y);
+    line.setAttribute("x2", width - 20);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "black");
+    line.setAttribute("stroke-width", "2");
+    svg.appendChild(line);
+
+    // Quantum labels
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", 0);
+    text.setAttribute("y", y + 5);
+    text.textContent = `q${q}`;
+    svg.appendChild(text);
+  }
+  const startY = numQubits * qheight + 50;
+  // --- Draw classical registers ---
+  for (let c = 0; c < numClassical; c++) {
+    const y = startY + c * cHeight;
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("x1", 20);
+    line.setAttribute("y1", y);
+    line.setAttribute("x2", width - 20);
+    line.setAttribute("y2", y);
+    line.setAttribute("stroke", "blue");
+    line.setAttribute("stroke-width", "2");
+    svg.appendChild(line);
+
+    // Classical labels
+    const text = document.createElementNS(svgNS, "text");
+    text.setAttribute("x", 0);
+    text.setAttribute("y", y + 5);
+    text.textContent = `cr[${c}]`;
+    svg.appendChild(text);
+  }
+
+
+  // --- Draw gates ---
+  gates.forEach((g, i) => {
+    const x = 100 + i * 120;
+
+    // 🎯 Handle single-qubit standard + rotation gates
+    if (["X", "Y", "Z", "H", "S", "T", "SDG", "TDG", "RX", "RY", "RZ", "PHASE"].includes(g.type)) {
+      const qTarget = g.params[0];
+      const y = 30 + qTarget * qheight;
+
+      const rect = document.createElementNS(svgNS, "rect");
+      rect.setAttribute("x", x - 25);
+      rect.setAttribute("y", y - 25);
+      rect.setAttribute("width", 50);
+      rect.setAttribute("height", 50);
+      rect.setAttribute("fill", "#d1e7dd");
+      rect.setAttribute("stroke", "black");
+      svg.appendChild(rect);
+
+      const label = document.createElementNS(svgNS, "text");
+      label.setAttribute("x", x);
+      label.setAttribute("y", y);
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("font-size", "14");
+      label.setAttribute("dominant-baseline", "middle");
+
+      // Show gate + angle if rotation
+      if (["RX", "RY", "RZ", "PHASE"].includes(g.type)) {
+        const angleDeg = g.angle ? (g.angle * 180 / Math.PI).toFixed(1) : "";
+        label.textContent = `${g.type}${angleDeg ? `(${angleDeg}°)` : ""}`;
+        
+      } else {
+        label.textContent = g.type;
+      }
+
+      svg.appendChild(label);
+    }
+
+    // CNOT
+    if (g.type === "CNOT") {
+      const c = g.params[0];
+      const t = g.params[1];
+      const yc = 30 + c * qheight;
+      const yt = 30 + t * qheight;
+
+      const dot = document.createElementNS(svgNS, "circle");
+      dot.setAttribute("cx", x);
+      dot.setAttribute("cy", yc);
+      dot.setAttribute("r", 6);
+      dot.setAttribute("fill", "black");
+      svg.appendChild(dot);
+
+      const circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", x);
+      circle.setAttribute("cy", yt);
+      circle.setAttribute("r", 12);
+      circle.setAttribute("stroke", "black");
+      circle.setAttribute("fill", "white");
+      svg.appendChild(circle);
+
+      const lineV = document.createElementNS(svgNS, "line");
+      lineV.setAttribute("x1", x);
+      lineV.setAttribute("y1", yc);
+      lineV.setAttribute("x2", x);
+      lineV.setAttribute("y2", yt);
+      lineV.setAttribute("stroke", "black");
+      lineV.setAttribute("stroke-width", "2");
+      svg.appendChild(lineV);
+
+      const lineH = document.createElementNS(svgNS, "line");
+      lineH.setAttribute("x1", x - 10);
+      lineH.setAttribute("y1", yt);
+      lineH.setAttribute("x2", x + 10);
+      lineH.setAttribute("y2", yt);
+      lineH.setAttribute("stroke", "black");
+      lineH.setAttribute("stroke-width", "2");
+      svg.appendChild(lineH);
+
+      const lineV2 = document.createElementNS(svgNS, "line");
+      lineV2.setAttribute("x1", x);
+      lineV2.setAttribute("y1", yt - 10);
+      lineV2.setAttribute("x2", x);
+      lineV2.setAttribute("y2", yt + 10);
+      lineV2.setAttribute("stroke", "black");
+      lineV2.setAttribute("stroke-width", "2");
+      svg.appendChild(lineV2);
+    }
+    //cz
+    // CZ
+if (g.type === "CZ") {
+  const c = g.params[0];
+  const t = g.params[1];
+  const yc = 30 + c * qheight;
+  const yt = 30 + t * qheight;
+
+  // Control dot
+  const dotC = document.createElementNS(svgNS, "circle");
+  dotC.setAttribute("cx", x);
+  dotC.setAttribute("cy", yc);
+  dotC.setAttribute("r", 6);
+  dotC.setAttribute("fill", "black");
+  svg.appendChild(dotC);
+
+  // Target dot
+  const dotT = document.createElementNS(svgNS, "circle");
+  dotT.setAttribute("cx", x);
+  dotT.setAttribute("cy", yt);
+  dotT.setAttribute("r", 6);
+  dotT.setAttribute("fill", "black");
+  svg.appendChild(dotT);
+
+  // Vertical line connecting them
+  const lineV = document.createElementNS(svgNS, "line");
+  lineV.setAttribute("x1", x);
+  lineV.setAttribute("y1", yc);
+  lineV.setAttribute("x2", x);
+  lineV.setAttribute("y2", yt);
+  lineV.setAttribute("stroke", "black");
+  lineV.setAttribute("stroke-width", "2");
+  svg.appendChild(lineV);
+}
+
+    // SWAP
+    if (g.type === "SWAP") {
+      const a = g.params[0];
+      const b = g.params[1];
+      const ya = 30 + a * qheight;
+      const yb = 30 + b * qheight;
+
+      const line1 = document.createElementNS(svgNS, "line");
+      line1.setAttribute("x1", x - 10);
+      line1.setAttribute("y1", ya - 10);
+      line1.setAttribute("x2", x + 10);
+      line1.setAttribute("y2", ya + 10);
+      line1.setAttribute("stroke", "black");
+      line1.setAttribute("stroke-width", "2");
+      svg.appendChild(line1);
+
+      const line2 = document.createElementNS(svgNS, "line");
+      line2.setAttribute("x1", x - 10);
+      line2.setAttribute("y1", ya + 10);
+      line2.setAttribute("x2", x + 10);
+      line2.setAttribute("y2", ya - 10);
+      line2.setAttribute("stroke", "black");
+      line2.setAttribute("stroke-width", "2");
+      svg.appendChild(line2);
+
+      const line3 = document.createElementNS(svgNS, "line");
+      line3.setAttribute("x1", x - 10);
+      line3.setAttribute("y1", yb - 10);
+      line3.setAttribute("x2", x + 10);
+      line3.setAttribute("y2", yb + 10);
+      line3.setAttribute("stroke", "black");
+      line3.setAttribute("stroke-width", "2");
+      svg.appendChild(line3);
+
+      const line4 = document.createElementNS(svgNS, "line");
+      line4.setAttribute("x1", x - 10);
+      line4.setAttribute("y1", yb + 10);
+      line4.setAttribute("x2", x + 10);
+      line4.setAttribute("y2", yb - 10);
+      line4.setAttribute("stroke", "black");
+      line4.setAttribute("stroke-width", "2");
+      svg.appendChild(line4);
+
+      const lineV = document.createElementNS(svgNS, "line");
+      lineV.setAttribute("x1", x);
+      lineV.setAttribute("y1", ya);
+      lineV.setAttribute("x2", x);
+      lineV.setAttribute("y2", yb);
+      lineV.setAttribute("stroke", "black");
+      lineV.setAttribute("stroke-width", "2");
+      svg.appendChild(lineV);
+    }
+
+    // Toffoli (CCNOT)
+    if (g.type === "CCNOT") {
+      const c1 = g.params[0];
+      const c2 = g.params[1];
+      const t = g.params[2];
+      const y1 = 30 + c1 * qheight;
+      const y2 = 30 + c2 * qheight;
+      const yt = 30 + t * qheight;
+
+      [y1, y2].forEach(yc => {
+        const dot = document.createElementNS(svgNS, "circle");
+        dot.setAttribute("cx", x);
+        dot.setAttribute("cy", yc);
+        dot.setAttribute("r", 6);
+        dot.setAttribute("fill", "black");
+        svg.appendChild(dot);
+      });
+
+      const lineV = document.createElementNS(svgNS, "line");
+      lineV.setAttribute("x1", x);
+      lineV.setAttribute("y1", Math.min(y1, y2));
+      lineV.setAttribute("x2", x);
+      lineV.setAttribute("y2", yt);
+      lineV.setAttribute("stroke", "black");
+      lineV.setAttribute("stroke-width", "2");
+      svg.appendChild(lineV);
+
+      const circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", x);
+      circle.setAttribute("cy", yt);
+      circle.setAttribute("r", 12);
+      circle.setAttribute("stroke", "black");
+      circle.setAttribute("fill", "white");
+      svg.appendChild(circle);
+
+      const lineH = document.createElementNS(svgNS, "line");
+      lineH.setAttribute("x1", x - 10);
+      lineH.setAttribute("y1", yt);
+      lineH.setAttribute("x2", x + 10);
+      lineH.setAttribute("y2", yt);
+      lineH.setAttribute("stroke", "black");
+      lineH.setAttribute("stroke-width", "2");
+      svg.appendChild(lineH);
+
+      const lineV2 = document.createElementNS(svgNS, "line");
+      lineV2.setAttribute("x1", x);
+      lineV2.setAttribute("y1", yt - 10);
+      lineV2.setAttribute("x2", x);
+      lineV2.setAttribute("y2", yt + 10);
+      lineV2.setAttribute("stroke", "black");
+      lineV2.setAttribute("stroke-width", "2");
+      svg.appendChild(lineV2);
+    }
+    if (g.type === "MEASURE") {
+    }
+    if(g.type != "MEASURE"){
+          // --- Draw identity gates for qubits not affected by this gate ---
+      for (let q = 0; q < numQubits; q++) {
+        let isTarget = false;
+
+        if (["X","Y","Z","H","S","T","SDG","TDG","RX","RY","RZ","PHASE","MEASURE"].includes(g.type)) {
+          isTarget = (q === g.params[0]);
+        } else if (["CNOT", "CZ"].includes(g.type)) {
+          isTarget = (q === g.params[0] || q === g.params[1]);
+        } else if (g.type === "CCNOT") {
+          isTarget = (q === g.params[0] || q === g.params[1] || q === g.params[2]);
+        } else if (g.type === "MEASURE") {
+          isTarget = (q === g.params[0]);
+        }else if (g.type === "SWAP"){
+          isTarget = (q === g.params[0] || q === g.params[1]);
+        }
+        if (!isTarget) {
+          const y = 30 + q * qheight;
+          const rect = document.createElementNS(svgNS, "rect");
+          rect.setAttribute("x", x - 15);
+          rect.setAttribute("y", y - 15);
+          rect.setAttribute("width", 30);
+          rect.setAttribute("height", 30);
+          rect.setAttribute("fill", "#f0f0f0");  // gray/light color for identity
+          rect.setAttribute("stroke", "black");
+          svg.appendChild(rect);
+
+          const label = document.createElementNS(svgNS, "text");
+          label.setAttribute("x", x);
+          label.setAttribute("y", y);
+          label.setAttribute("text-anchor", "middle");
+          label.setAttribute("dominant-baseline", "middle");
+          label.setAttribute("font-size", "12");
+          label.textContent = "I";
+          svg.appendChild(label);
+        }
+      }
+    }
+  });
+
+
+
+  container.appendChild(svg);
+}
+
+function convertBackendToCircuitGates(backendGates) {
+  return backendGates.map(g => {
+    const type = g.gate.toUpperCase();
+    if (["X","Y","Z","H","S","T"].includes(g.gate)) {
+      return { type: g.gate, params: g.qubits };
+    }
+    if (["RX","RY","RZ"].includes(g.gate)) {
+      return { type: g.gate, params: g.qubits, angle: g.angle };
+    }
+    if (g.gate === "CNOT") {
+      return { type: "CNOT", params: [g.control, g.target] };
+    }
+    if (g.gate === "CZ") {
+      return { type: "CZ", params: [g.control, g.target] };
+    }
+    if (g.gate === "CCNOT") {
+      return { type: "CCNOT", params: [g.control1, g.control2, g.target] };
+    }
+    if (g.gate === "SWAP") {
+      return { type: "SWAP", params: [g.q1, g.q2] };
+    }
+    if (g.gate === "MEASURE") {
+      return { type: "MEASURE", params: [g.qubit, g.clbit] };
+    }
+    return null; // ignore unknown
+  }).filter(Boolean);
+}
+
+// Add a term to the wavefunction input when button clicked
+addTermBtn.addEventListener('click', () => {
+  const basis = basisSelector.value;
+  const amplitude = amplitudeInput.value.trim();
+
+  if (basis === '' || amplitude === '') return;
+
+  const term = `(${amplitude})|${basis}>`;
+  waveInput.value = waveInput.value? waveInput.value + ' + ' + term: term;
+
+  amplitudeInput.value = '';
+  basisSelector.selectedIndex = 0;
+});
+
+const btn = document.getElementById('convertBtn');
+btn.addEventListener('click', convertWavefunction);
+
+function convertWavefunction() {
+  var n = parseInt(document.getElementById('numQubits').value, 10);
+  var wf = document.getElementById('waveInput').value || '';
+  var errorBox = document.getElementById('errorMsg');
+  var out = document.getElementById('colVector');
+
+  // Clear previous output and errors
+  errorBox.textContent = '';
+  out.textContent = '';
+
+  if (!Number.isInteger(n) || n < 1 || n > 5) {
+    errorBox.textContent = '⚠ Enter a valid number of qubits (between 1 and 5).';
+    return;
+  }
+
+  var dim = 1 << n; // 2^n
+  var vector = new Array(dim).fill(0);
+
+  var termRegex = /([+-]?\s*(?:\([^\)]+\)|[0-9.]+(?:e[+-]?\d+)?(?:i[0-9.+-]+)?))?\s*\|\s*([01]+)\s*>/g;
+  var m;
+  var anyMatch = false;
+  var invalidTerms = [];
+
+  while ((m = termRegex.exec(wf)) !== null) {
+    anyMatch = true;
+
+    var rawCoeff = (m[1] || '').trim();
+    if (rawCoeff === '' || rawCoeff === '+') rawCoeff = '1';
+    if (rawCoeff === '-') rawCoeff = '-1';
+
+    rawCoeff = rawCoeff.replace(/[()]/g, '').replace(/^\+/, '');
+
+    var basis = (m[2] || '').trim();
+
+    if (basis.length > n) {
+      invalidTerms.push('|' + basis + '>');
+      continue;
+    }
+
+    var padded = basis.padStart(n, '0');
+    var index = parseInt(padded, 2);
+
+    if (!isNaN(index) && index < dim) {
+      var num = parseFloat(rawCoeff);
+      vector[index] = isNaN(num) ? rawCoeff : num;
+    }
+  }
+
+  if (!anyMatch) {
+    var zeros = '0'.repeat(n);
+    var ones = '1'.repeat(n);
+    errorBox.textContent =
+      '⚠ No valid terms found. Example for ' +
+      n + ' qubit(s): (0.7)|' + zeros + '> + (0.7)|' + ones + '>';
+  }
+
+  if (invalidTerms.length > 0) {
+    errorBox.textContent =
+      '⚠ Invalid basis states: ' + invalidTerms.join(', ') +
+      ' (expected ' + n + '-qubit states like |' +
+      '0'.repeat(n) + '>, |' + '1'.repeat(n) + '>, etc.)';
+  }
+     // Validate normalization: sum of squares of amplitudes ≈ 1
+  const sumSquares = vector.reduce((acc, val) => acc + (typeof val === 'number' ? val * val : 0), 0);
+  if (sumSquares < 0.99 || sumSquares > 1.01) {
+    errorBox.textContent = 
+      `⚠ Error: Invalid normalization. The sum of squares of amplitudes is ${sumSquares.toFixed(4)}. It should be approximately 1 (tolerance ±0.01).`;
+    vector = new Array(dim).fill(0);
+  }
+  out.textContent = '[' + vector.join(', ') + ']';
+  fetch("http://127.0.0.1:8000/prepare_state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      num_qubits: n,
+      amplitudes: vector,
+      initial_basis: "0".repeat(n),
+      optimized: true   // or false if you want full circuit
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+  // Convert backend gates → circuit gates
+  const circuitGates = convertBackendToCircuitGates(data.gate_sequence);
+
+    // Draw SVG circuit
+  renderCircuit(data.num_qubits, circuitGates);
+
+  let output = "";
+  if (data.gate_sequence && data.gate_sequence.length > 0) {
+    data.gate_sequence.forEach(step => {
+      if (step.gate === "CNOT") {
+        output += `${step.step}. Apply CNOT (control q${step.control} → target q${step.target})\n`;
+      } else if (["RX","RY","RZ"].includes(step.gate)) {
+        output += `${step.step}. Apply ${step.gate}(${step.angle.toFixed(6)}) on qubits ${step.qubits.join(", ")}\n`;
+      } else {
+        output += `${step.step}. Apply ${step.gate} on qubits ${step.qubits.join(", ")}\n`;
+      }
+    });
+  } else {
+    output = "⚠ No gates returned by backend.";
+  }
+
+  document.getElementById("backendOutput").textContent = output;
+  drawHistogram(data.counts);
+})
+  .catch(err => {
+    document.getElementById("backendOutput").textContent =
+      "❌ Backend error: " + err;
+  });
+}
