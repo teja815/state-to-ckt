@@ -521,7 +521,7 @@ function convertWavefunction() {
     vector = new Array(dim).fill(0);
   }
   out.textContent = '[' + vector.join(', ') + ']';
-  fetch("http://127.0.0.1:8000/prepare_state", {
+  fetch("https://state-to-circuit.onrender.com/prepare_state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -562,3 +562,4 @@ function convertWavefunction() {
       "❌ Backend error: " + err;
   });
 }
+
