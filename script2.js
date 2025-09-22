@@ -29,7 +29,9 @@ function drawHistogram(counts) {
 
     const ctx = document.getElementById('histogram').getContext('2d');
      if (histogramChart) {
-        histogramChart.destroy();
+      histogramChart.data.labels = labels;
+      histogramChart.data.datasets[0].data = values;
+      histogramChart.update();
     }
     histogramChart = new Chart(ctx, {
         type: 'bar',
@@ -55,6 +57,163 @@ function drawHistogram(counts) {
             }
         }
     });
+}
+/**
+ * Convert a numeric or mixed vector to complex objects compatible with plotQSphere
+ * @param {Array<number|object>} vector - array of numbers or objects
+ * @returns {Array<{re:number, im:number}>} - complex vector
+ */
+function makeComplexVector(vector) {
+    return vector.map(v => {
+        if (typeof v === 'number') {
+            return { re: v, im: 0 };        // real number → complex with im=0
+        }
+        if (v && typeof v.re === 'number' && typeof v.im === 'number') {
+            return v;                       // already complex
+        }
+        // fallback if invalid value
+        return { re: 0, im: 0 };
+    });
+}
+
+function plotQSphere(divId, stateVec) {
+  const nQ = Math.log2(stateVec.length);
+  const spikeTraces = [];
+  const tipTraces = [];
+  const latitudeTraces = [];
+  const labelX = [];
+  const labelY = [];
+  const labelZ = [];
+  const labelText = [];
+
+  const coords = [];
+  const phases = [];
+  const probs = [];
+  const arcTraces = [];
+
+  // --- Compute spike positions ---
+  for (let i = 0; i < stateVec.length; i++) {
+    const amp = stateVec[i];
+    const re = amp.re, im = amp.im;
+    const prob = re*re + im*im;
+    const phase = Math.atan2(im, re);
+    const weightStr = i.toString(2).padStart(nQ,'0');
+
+    // --- evenly distribute states on sphere ---
+    const hamming = weightStr.split('').filter(q => q==='1').length;
+    const theta = (hamming / nQ) * Math.PI;           // latitude by Hamming weight
+    const phi = 2 * Math.PI * i / stateVec.length;   // evenly around longitude
+
+    const r = 1.0;
+    const x = r * Math.sin(theta) * Math.cos(phi);
+    const y = r * Math.sin(theta) * Math.sin(phi);
+    const z = r * Math.cos(theta);
+
+    coords.push([x, y, z]);
+    phases.push(phase);
+    probs.push(prob);
+
+    labelX.push(x);
+    labelY.push(y);
+    labelZ.push(z);
+    labelText.push(`|${weightStr}⟩`);
+
+    // radial line
+    spikeTraces.push({
+      type:"scatter3d",
+      mode:"lines",
+      x:[0, x], y:[0, y], z:[0, z],
+      line:{color:`hsl(${(phase*180/Math.PI+360)%360},80%,50%)`, width:1 + 8*prob},
+      opacity:0.8,
+      hoverinfo:"skip",
+      showlegend : false
+    });
+
+    // tip marker for hover text
+    tipTraces.push({
+      type: "scatter3d",
+      mode: "markers",
+      x: [x], y: [y], z: [z],
+      marker: {size: 5 + 20*prob, color:`hsl(${(phase*180/Math.PI+360)%360},80%,40%)`},
+      text: `|${weightStr}⟩<br>amp=${re.toFixed(2)} + ${im.toFixed(2)}i<br>P=${prob.toFixed(2)}<br>phase=${phase.toFixed(2)}`,
+      hoverinfo: "text",
+      showlegend : false
+    });
+  }
+  // --- Latitude circles ---
+  const SPHERE_POINTS = 60;
+  for (let k = 0; k <= nQ; k++) {
+    const theta = (k / nQ) * Math.PI;
+    const latX = [], latY = [], latZ = [];
+    for (let p = 0; p <= SPHERE_POINTS; p++) {
+      const phi = (p / SPHERE_POINTS) * 2 * Math.PI;
+      latX.push(Math.sin(theta)*Math.cos(phi));
+      latY.push(Math.sin(theta)*Math.sin(phi));
+      latZ.push(Math.cos(theta));
+    }
+    latitudeTraces.push({
+      type:"scatter3d",
+      mode:"lines",
+      x:latX, y:latY, z:latZ,
+      line:{color:"gray", width:1},
+      opacity:0.2,
+      hoverinfo:"skip",
+      showlegend:false
+    });
+  }
+
+  // --- Transparent sphere ---
+  const U = 30, V = 30;
+  const xs = [], ys = [], zs = [];
+  for (let i = 0; i <= U; i++) {
+    const theta = Math.PI * i / U;
+    const rowX = [], rowY = [], rowZ = [];
+    for (let j = 0; j <= V; j++) {
+      const phi = 2*Math.PI*j/V;
+      rowX.push(Math.sin(theta)*Math.cos(phi));
+      rowY.push(Math.sin(theta)*Math.sin(phi));
+      rowZ.push(Math.cos(theta));
+    }
+    xs.push(rowX); ys.push(rowY); zs.push(rowZ);
+  }
+
+  const sphereSurface = {
+    type:'surface', x:xs, y:ys, z:zs,
+    opacity:0.2,
+    colorscale:[[0,'rgba(228,246,253,0.87)'], [1,'rgba(248,200,244,0.5)']],
+    showscale:false,
+    contours: {
+      x: { show: true, color: "#5a56568a", width: 20 },
+      y: { show: true, color: "#5a565680", width: 20},
+      z: { show: true, color: "#5a565685", width:20 }
+    },
+    hoverinfo:'skip',
+    showlegend:false
+  };
+
+  const labelTraces = {
+    type:"scatter3d",
+    mode:"text",
+    x:labelX, y:labelY, z:labelZ,
+    text:labelText,
+    textposition:"top center",
+    textfont:{size:12, color:"#333333"},
+    hoverinfo:"skip",
+    showlegend:false
+  };
+  const layout = {
+    title:"Q-Sphere <br> size(Dot)-> probability<br> color(Dot)->Phase",
+    margin:{l:0,r:0,b:0,t:30},
+    scene:{
+      aspectmode:'cube',
+      xaxis:{range:[-1.3,1.3],showgrid:false,zeroline:false,showticklabels:false,visible:false},
+      yaxis:{range:[-1.3,1.3],showgrid:false,zeroline:false,showticklabels:false,visible:false},
+      zaxis:{range:[-1.3,1.3],showgrid:false,zeroline:false,showticklabels:false,visible:false},
+      camera:{eye:{x:0.8,y:0.8,z:0.8}}
+    },
+  };
+
+  Plotly.newPlot(divId, [sphereSurface, ...latitudeTraces, ...spikeTraces, ...tipTraces, labelTraces], layout);
 }
 
 //circuit printing
@@ -521,7 +680,7 @@ function convertWavefunction() {
     vector = new Array(dim).fill(0);
   }
   out.textContent = '[' + vector.join(', ') + ']';
-  fetch("https://state-to-circuit.onrender.com/prepare_state", {
+  fetch("http://127.0.0.1:8000/prepare_state", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -553,6 +712,8 @@ function convertWavefunction() {
   } else {
     output = "⚠ No gates returned by backend.";
   }
+const complexVec = makeComplexVector(vector);  // `vector` is your numeric array
+plotQSphere('qsphereDiv', complexVec);
 
   document.getElementById("backendOutput").textContent = output;
   drawHistogram(data.counts);
@@ -562,4 +723,3 @@ function convertWavefunction() {
       "❌ Backend error: " + err;
   });
 }
-
