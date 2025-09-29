@@ -1,137 +1,297 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-full">
+
 <head>
   <meta charset="utf-8" />
   <title>Quantum State to Column Vector</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+
   <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #155eab;
+      --bg-light: #f8fafc;
+      --bg-dark: #0f172a;
+      --card-light: rgba(255, 255, 255, 0.85);
+      --card-dark: rgba(30, 41, 59, 0.85);
+      --text-light: #155eab;
+      --text-dark: #f1f5f9;
+      --border-light: #b6d0fa;
+      --border-dark: #334155;
+      --glass-blur: blur(12px);
+    }
+
+    .light-mode {
+      --bg-color: linear-gradient(135deg, #e0f2fe 0%, #f8fafc 100%);
+      --card-color: var(--card-light);
+      --text-color: var(--text-light);
+      --border-color: var(--border-light);
+    }
+
+    .dark-mode {
+      --bg-color: linear-gradient(135deg, #8095f5 0%, #3b1c5c 100%);
+      --card-color: rgba(36, 41, 71, 0.92);
+      --text-color: #e0e7ef;
+      --border-color: #4f46e5;
+    }
+
+    * {
+      transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    }
+
     body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: #e6ebff;
-      color: #000000;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
       margin: 0;
+      min-height: 100vh;
     }
+
     .container {
-      background: #cacaca;
-      padding: 24px;
-      border-radius: 12px;
+      background: var(--card-color);
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.08), 0 1.5px 8px rgba(21, 94, 171, 0.08);
+      border: 1.5px solid var(--border-color);
       width: 90%;
-      max-width: 500px;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
-      box-sizing: border-box;
+      max-width: 600px;
+      margin: 2rem auto;
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
     }
-    h2 {
-      margin-top: 0;
-      color: #000000;
-      text-align: center;
-    }
-    label {
-      font-size: 0.9rem;
-      color: #000000;
-      display: block;
-      margin-top: 10px;
-    }
-    input, button, select {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0;
-      border-radius: 6px;
+
+    .btn-primary {
+      background: linear-gradient(90deg, #2563eb 60%, #60a5fa 100%);
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
       border: none;
-      font-size: 1em;
-      box-sizing: border-box;
-    }
-    input {
-      background: #ffffff;
-      color: #000000;
-    }
-    button {
-      background: #3c3ff1;
-      color: #000000;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.10);
+      letter-spacing: 0.5px;
     }
-    button:hover {
-      background: #08249e;
+
+    .btn-primary:hover {
+      background: linear-gradient(90deg, #155eab 60%, #2563eb 100%);
+      transform: translateY(-1px) scale(1.03);
+      box-shadow: 0 4px 16px rgba(21, 94, 171, 0.15);
     }
-    pre, .backend-output {
-      background: #ffffff;
-      padding: 12px;
-      border-radius: 6px;
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--border-color);
+    }
+
+    .form-row {
+      /* Removed flex layout for stacked input fields */
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    .form-input {
+      flex: 1 1 0;
+      min-width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      background: var(--card-color);
+      color: var(--text-color);
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .card {
+      background: var(--card-color);
+      border: 1.5px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      box-shadow: 0 2px 12px rgba(37, 99, 235, 0.07);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+    }
+
+    .mode-toggle {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: var(--card-color);
+      border: 1px solid var(--border-color);
+      border-radius: 2rem;
+      padding: 0.5rem;
+      cursor: pointer;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+
+    .slide-up {
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    pre,
+    .backend-output {
+      background: var(--bg-color);
+      padding: 1rem;
+      border-radius: 0.5rem;
       white-space: pre-wrap;
       word-break: break-word;
-      margin-top: 10px;
-      min-height: 48px;
-      color: #000000;
-      font-family: Consolas, monospace;
+      border: 1px solid var(--border-color);
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.9rem;
     }
-    .error {
-      color: #d31717;
-      font-weight: 600;
-      margin-top: 8px;
-    }
-    @media (max-width: 600px) {
-  body {
-    padding: 10px;
-  }
-  
-  input, select, button {
-    font-size: 1em;
-    padding: 12px;
-  }
-  
-  h2 {
-    font-size: 1.5em;
-  }
-}
 
+    .error {
+      color: #ef4444;
+      font-weight: 600;
+      padding: 0.75rem;
+      background: rgba(239, 68, 68, 0.1);
+      border-radius: 0.5rem;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    h2,
+    h3 {
+      margin-top: 0;
+      color: #155eab;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+    }
+
+    label {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: block;
+      color: #155eab;
+      letter-spacing: 0.2px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 1rem;
+        margin: 1rem auto;
+      }
+
+      .mode-toggle {
+        top: 0.5rem;
+        right: 0.5rem;
+      }
+    }
   </style>
 </head>
-<body>
-  <div class="container" role="main">
-    <h2>Quantum State → Column Vector</h2>
 
-    <label for="numQubits"><b>Number of Qubits (1–5):</b></label>
-    <input id="numQubits" type="number" placeholder="e.g. 2" min="1" max="5" />
+<body class="light-mode">
+  <!-- Dark/Light Mode Toggle -->
+  <button class="mode-toggle" id="modeToggle" aria-label="Toggle dark mode">
+    <svg id="sunIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="12" r="5" fill="#facc15" />
+      <g stroke="#facc15" stroke-width="2">
+        <line x1="12" y1="2" x2="12" y2="5" />
+        <line x1="12" y1="19" x2="12" y2="22" />
+        <line x1="2" y1="12" x2="5" y2="12" />
+        <line x1="19" y1="12" x2="22" y2="12" />
+        <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+        <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+        <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+        <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+      </g>
+    </svg>
+    <svg id="moonIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 1 0 9.79 9.79z" fill="#a5b4fc" />
+    </svg>
+  </button>
 
-    <label for="basisSelector"><b>Select Basis State:</b></label>
-    <select id="basisSelector">
-      <option value="">-- Select basis state --</option>
-    </select>
+  <div class="container fade-in" role="main">
+    <h2 class="text-center slide-up">Quantum State → Column Vector</h2>
 
-    <label for="amplitudeInput"><b>Amplitude (+/- allowed):</b></label>
-    <input id="amplitudeInput" type="text" placeholder="e.g. 0.07 or -0.5" />
+    <div class="card slide-up">
+      <label for="numQubits"><b>Number of Qubits (1–5):</b></label>
+      <input id="numQubits" type="number" placeholder="e.g. 2" min="1" max="5" class="form-input" />
 
-    <button id="addTermBtn">Add Term</button>
+      <label for="basisSelector"><b>Select Basis State:</b></label>
+      <select id="basisSelector" class="form-input">
+        <option value="">-- Select basis state --</option>
+      </select>
 
-    <label for="waveInput"><b>Wavefunction (Dirac notation):</b></label>
-    <input id="waveInput" type="text" placeholder="e.g. (0.7)|0> + (0.7)|1>" />
+      <label for="amplitudeInput"><b>Amplitude (+/- allowed):</b></label>
+      <input id="amplitudeInput" type="text" placeholder="e.g. 0.07 or -0.5" class="form-input" />
 
-    <button id="convertBtn">Convert</button>
+      <button id="addTermBtn" class="btn-primary" style="margin-top:1rem;">Add Term</button>
+    </div>
 
-    <h3>Column Vector:</h3>
-    <pre id="colVector" aria-live="polite"></pre>
+    <div class="card slide-up">
+      <label for="waveInput"><b>Wavefunction (Dirac notation):</b></label>
+      <input id="waveInput" type="text" placeholder="e.g. (0.7)|0> + (0.7)|1>" class="form-input" />
 
-    <div id="errorMsg" class="error" aria-live="assertive"></div>
+      <button id="convertBtn" class="btn-primary" style="margin-top:1rem;">Convert</button>
+    </div>
 
-    <h3>Backend Output (future):</h3>
-    <div class="backend-output" id="backendOutput">Waiting for backend...</div>
-    <div id="circuitContainer" 
-     style="width:100%; overflow-x:auto; white-space:nowrap; border:1px solid #ccc; padding:10px;">
-</div>
-<div id="qsphereDiv" style="width:600px;height:600px; overflow-x: auto;" ></div>
-<canvas id="histogram"></canvas>
+    <div class="card slide-up">
+      <h3>Column Vector:</h3>
+      <pre id="colVector" aria-live="polite"></pre>
+    </div>
 
+    <div id="errorMsg" class="error" aria-live="assertive" style="display: none;"></div>
 
+    <div class="card slide-up">
+      <h3>Backend Output:</h3>
+      <div class="backend-output" id="backendOutput">Waiting for backend...</div>
+    </div>
+
+    <div id="circuitContainer" class="card slide-up"></div>
+
+    <div id="qsphereDiv" class="card slide-up" style="width:92%; height:600px; overflow-x: auto;"></div>
+
+    <div class="card slide-up">
+      <canvas id="histogram"></canvas>
+    </div>
   </div>
 
-  <script src="script.js">
-  </script>
+  <script src="script.js"></script>
 </body>
+
 </html>
