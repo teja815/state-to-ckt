@@ -225,9 +225,11 @@
 </head>
 
 <body class="light-mode">
-  <!-- Dark/Light Mode Toggle -->
-  <button class="mode-toggle" id="modeToggle" aria-label="Toggle dark mode">
-    <svg id="sunIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+
+  <!-- Dark/Light Mode Toggle Button (responsive, overlays hero) -->
+  <button class="mode-toggle" id="modeToggle" aria-label="Toggle dark mode"
+    style="position:fixed;top:1rem;right:1rem;z-index:1001;">
+    <svg id="sunIcon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
       <circle cx="12" cy="12" r="5" fill="#facc15" />
       <g stroke="#facc15" stroke-width="2">
         <line x1="12" y1="2" x2="12" y2="5" />
@@ -240,12 +242,34 @@
         <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
       </g>
     </svg>
-    <svg id="moonIcon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+    <svg id="moonIcon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
       <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 1 0 9.79 9.79z" fill="#a5b4fc" />
     </svg>
   </button>
 
-  <div class="container fade-in" role="main">
+  <!-- Modern Hero Section -->
+  <section class="hero-section"
+    style="position:relative; min-height:100vh; display:flex; align-items:center; justify-content:center; overflow:hidden; background:linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 100%);">
+    <!-- Animated Gradient Background -->
+    <div
+      style="position:absolute; inset:0; z-index:0; background:linear-gradient(120deg, #a5b4fc 0%, #f0fdfa 100%); opacity:0.7;">
+    </div>
+    <!-- Content -->
+    <div style="position:relative; z-index:1; text-align:center; max-width:700px; width:100%; padding:2rem 1rem;">
+      <h1
+        style="font-size:3rem; font-weight:800; margin-bottom:1.5rem; background:linear-gradient(90deg, #6366f1 30%, #06b6d4 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; color:transparent;">
+        Quantum State to Circuit Visualizer</h1>
+      <p style="font-size:1.35rem; color:#334155; margin-bottom:2.5rem; font-weight:500;">A next-generation tool for
+        exploring quantum state vectors and their corresponding quantum circuits. Experience interactive visualizations
+        and modern UI design.</p>
+      <a href="#main-app"
+        style="display:inline-block; padding:1rem 2.5rem; font-size:1.15rem; font-weight:700; border-radius:2rem; background:linear-gradient(90deg, #6366f1 60%, #06b6d4 100%); color:#fff; box-shadow:0 4px 24px rgba(99,102,241,0.15); text-decoration:none; transition:transform 0.15s;">Get
+        Started</a>
+    </div>
+  </section>
+
+  <!-- Main App Section (hidden until user scrolls or clicks Get Started) -->
+  <div id="main-app" class="container fade-in" role="main" style="margin-top:3rem;">
     <h2 class="text-center slide-up">Quantum State → Column Vector</h2>
 
     <div class="card slide-up">
@@ -292,6 +316,34 @@
   </div>
 
   <script src="script.js"></script>
+  <script>
+    // Responsive dark/light mode toggle logic
+    const modeToggle = document.getElementById('modeToggle');
+    const sunIcon = document.getElementById('sunIcon');
+    const moonIcon = document.getElementById('moonIcon');
+    function setMode(mode) {
+      document.body.className = mode + '-mode';
+      if (mode === 'dark') {
+        sunIcon.style.display = 'none';
+        moonIcon.style.display = '';
+      } else {
+        sunIcon.style.display = '';
+        moonIcon.style.display = 'none';
+      }
+      localStorage.setItem('theme', mode);
+    }
+    modeToggle.addEventListener('click', () => {
+      const isDark = document.body.classList.contains('dark-mode');
+      setMode(isDark ? 'light' : 'dark');
+    });
+    // On load, set mode from localStorage or system preference
+    (function () {
+      const saved = localStorage.getItem('theme');
+      if (saved) setMode(saved);
+      else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) setMode('dark');
+      else setMode('light');
+    })();
+  </script>
 </body>
 
 </html>
