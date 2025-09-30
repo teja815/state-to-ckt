@@ -72,12 +72,80 @@ const addTermBtn = document.getElementById('addTermBtn');
 const waveInput = document.getElementById('waveInput');
 let histogramChart = null;
 
+// Function to generate sample wavefunctions with zero amplitudes
+function generateSampleWavefunctions(n) {
+    const totalCombinations = 1 << n;
+    const samples = [];
+    
+    // Sample 1: Bell state (maximally entangled)
+    if (n >= 2) {
+        samples.push({
+            name: "Bell State (|00⟩ + |11⟩)",
+            wavefunction: `(0.707)|${'0'.repeat(n)}> + (0.707)|${'1'.repeat(n)}>`
+        });
+    }
+    
+    // Sample 2: Single excited state
+    samples.push({
+        name: `Single Excited |${'0'.repeat(n-1)}1⟩`,
+        wavefunction: `(1.0)|${'0'.repeat(n-1)}1>`
+    });
+    
+    // Sample 3: Equal superposition with some zeros
+    if (n >= 2) {
+        const states = [];
+        for (let i = 0; i < totalCombinations; i++) {
+            if (i % 2 === 0) { // Only even-numbered states
+                const binStr = i.toString(2).padStart(n, '0');
+                const amp = (1 / Math.sqrt(totalCombinations / 2)).toFixed(3);
+                states.push(`(${amp})|${binStr}>`);
+            }
+        }
+        samples.push({
+            name: "Even States Only",
+            wavefunction: states.join(' + ')
+        });
+    }
+    
+    // Sample 4: Alternating pattern
+    if (n >= 3) {
+        const states = [];
+        for (let i = 0; i < totalCombinations; i++) {
+            const binStr = i.toString(2).padStart(n, '0');
+            const hammingWeight = binStr.split('1').length - 1;
+            if (hammingWeight === 1) { // Only states with exactly one '1'
+                const amp = (1 / Math.sqrt(n)).toFixed(3);
+                states.push(`(${amp})|${binStr}>`);
+            }
+        }
+        samples.push({
+            name: "Single Excitation States",
+            wavefunction: states.join(' + ')
+        });
+    }
+    
+    // Sample 5: Custom pattern with explicit zeros
+    if (n >= 2) {
+        const amp = (1 / Math.sqrt(2)).toFixed(3);
+        samples.push({
+            name: "Custom Pattern with Zeros",
+            wavefunction: `(${amp})|${'0'.repeat(n)}> + (0.0)|${'0'.repeat(n-1)}1> + (${amp})|${'1'.repeat(n-1)}0>`
+        });
+    }
+    
+    return samples;
+}
+
 // Populate basis state dropdown dynamically
 numQubitsInput.addEventListener('input', () => {
   const n = parseInt(numQubitsInput.value);
   basisSelector.innerHTML = '<option value="">-- Select basis state --</option>';
+  const basisStatesList = document.getElementById('basisStatesList');
+  const sampleWaveDiv = document.getElementById('sampleWavefunctionsList');
+  
   if (Number.isInteger(n) && n >= 1 && n <= 5) {
     const totalCombinations = 1 << n;
+    // Populate dropdown
     for (let i = 0; i < totalCombinations; i++) {
       const binStr = i.toString(2).padStart(n, '0');
       const option = document.createElement('option');
@@ -85,6 +153,45 @@ numQubitsInput.addEventListener('input', () => {
       option.textContent = '|' + binStr + '>';
       basisSelector.appendChild(option);
     }
+    // Show all possible basis states in Dirac notation
+    let html = '<b>Possible basis states:</b><br>';
+    html += Array.from({length: totalCombinations}, (_, i) => `|${i.toString(2).padStart(n, '0')}&gt;`).join(', ');
+    basisStatesList.innerHTML = html;
+
+    // Generate and display sample wavefunctions with zero amplitudes
+    const samples = generateSampleWavefunctions(n);
+    sampleWaveDiv.innerHTML = '';
+    samples.forEach(sample => {
+        const sampleDiv = document.createElement('div');
+        sampleDiv.className = 'sample-wavefunction';
+        sampleDiv.innerHTML = `<strong>${sample.name}:</strong> ${sample.wavefunction}`;
+        sampleDiv.addEventListener('click', () => {
+            waveInput.value = sample.wavefunction;
+            animateElement(sampleDiv, 'slide-up');
+        });
+        sampleWaveDiv.appendChild(sampleDiv);
+    });
+
+    // Generate a random normalized wavefunction (real amplitudes)
+    let amps = Array.from({length: totalCombinations}, () => Math.random());
+    const norm = Math.sqrt(amps.reduce((sum, a) => sum + a * a, 0));
+    amps = amps.map(a => a / norm);
+    // Show as Dirac notation
+    let wf = amps.map((a, i) => `(${a.toFixed(3)})|${i.toString(2).padStart(n, '0')}&gt;`).join(' + ');
+    
+    // Add the random sample to the samples list
+    const randomSampleDiv = document.createElement('div');
+    randomSampleDiv.className = 'sample-wavefunction';
+    randomSampleDiv.innerHTML = `<strong>Random Normalized State:</strong> ${wf}`;
+    randomSampleDiv.addEventListener('click', () => {
+        waveInput.value = wf;
+        animateElement(randomSampleDiv, 'slide-up');
+    });
+    sampleWaveDiv.appendChild(randomSampleDiv);
+    
+  } else {
+    basisStatesList.innerHTML = '';
+    if (sampleWaveDiv) sampleWaveDiv.innerHTML = '';
   }
   waveInput.value = '';
   document.getElementById('colVector').textContent = '';
@@ -339,6 +446,32 @@ function renderCircuit(numQubits, gates) {
   const numClassical = numQubits;
   container.innerHTML = "";
   container.innerHTML += "<h2>Circuit Diagram</h2>";
+  // Tooltip div for gate names
+  let tooltip = document.getElementById('gateTooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.id = 'gateTooltip';
+    tooltip.style.position = 'fixed';
+    tooltip.style.pointerEvents = 'none';
+    tooltip.style.background = 'rgba(30,41,59,0.95)';
+    tooltip.style.color = '#fff';
+    tooltip.style.padding = '6px 14px';
+    tooltip.style.borderRadius = '8px';
+    tooltip.style.fontSize = '1rem';
+    tooltip.style.fontWeight = '600';
+    tooltip.style.zIndex = '9999';
+    tooltip.style.display = 'none';
+    document.body.appendChild(tooltip);
+  }
+  function showTooltip(text, evt) {
+    tooltip.textContent = text;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (evt.clientX + 12) + 'px';
+    tooltip.style.top = (evt.clientY - 8) + 'px';
+  }
+  function hideTooltip() {
+    tooltip.style.display = 'none';
+  }
 
   const width = 120 * (gates.length + 1);
   const qheight = 60 ;
@@ -433,6 +566,9 @@ function renderCircuit(numQubits, gates) {
       rect.setAttribute("height", 50);
       rect.setAttribute("fill", gateColor);
       rect.setAttribute("stroke", strokeColor);
+      rect.style.cursor = 'pointer';
+      rect.addEventListener('mousemove', (evt) => showTooltip(g.type, evt));
+      rect.addEventListener('mouseleave', hideTooltip);
       svg.appendChild(rect);
 
       const label = document.createElementNS(svgNS, "text");
@@ -447,11 +583,9 @@ function renderCircuit(numQubits, gates) {
       if (["RX", "RY", "RZ", "PHASE"].includes(g.type)) {
         const angleDeg = g.angle ? (g.angle * 180 / Math.PI).toFixed(1) : "";
         label.textContent = `${g.type}${angleDeg ? `(${angleDeg}°)` : ""}`;
-        
       } else {
         label.textContent = g.type;
       }
-
       svg.appendChild(label);
     }
 
@@ -467,6 +601,9 @@ function renderCircuit(numQubits, gates) {
       dot.setAttribute("cy", yc);
       dot.setAttribute("r", 6);
       dot.setAttribute("fill", strokeColor);
+  dot.style.cursor = 'pointer';
+  dot.addEventListener('mousemove', (evt) => showTooltip('CNOT control', evt));
+  dot.addEventListener('mouseleave', hideTooltip);
       svg.appendChild(dot);
 
       const circle = document.createElementNS(svgNS, "circle");
@@ -475,6 +612,9 @@ function renderCircuit(numQubits, gates) {
       circle.setAttribute("r", 12);
       circle.setAttribute("stroke", strokeColor);
       circle.setAttribute("fill", isDark ? "#1e293b" : "white");
+  circle.style.cursor = 'pointer';
+  circle.addEventListener('mousemove', (evt) => showTooltip('CNOT gate', evt));
+  circle.addEventListener('mouseleave', hideTooltip);
       svg.appendChild(circle);
 
       const lineV = document.createElementNS(svgNS, "line");
